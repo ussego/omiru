@@ -317,8 +317,8 @@ Item {
           } else if (Util.editsFilter(event, root.filterText)) {
             root.setFilter(Util.editedFilter(event, root.filterText))
             event.accepted = true
-          } else if (event.key === Qt.Key_Tab) {
-            root.cycleCategory(event.modifiers & Qt.ShiftModifier ? -1 : 1)
+          } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+            root.cycleCategory(event.key === Qt.Key_Backtab ? -1 : 1)
             event.accepted = true
           } else if (event.key === Qt.Key_Left) {
             root.select(-1)
