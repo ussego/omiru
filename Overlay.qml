@@ -344,6 +344,9 @@ Item {
           } else if (event.key === Qt.Key_R && event.modifiers === Qt.ControlModifier) {
             root.refresh()
             event.accepted = true
+          } else if (event.key === Qt.Key_D && event.modifiers === Qt.ControlModifier) {
+            root.openDetail(root.selectedIndex)
+            event.accepted = true
           } else if (event.text && event.text.length === 1 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127 && (event.modifiers === Qt.NoModifier || event.modifiers === Qt.ShiftModifier)) {
             root.setFilter(root.filterText + event.text)
             event.accepted = true

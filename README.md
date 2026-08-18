@@ -27,6 +27,7 @@ omarchy-shell shell summon ussego.omiru
 - Type in the input at the top to filter logos by name.
 - Tab / Shift+Tab cycle categories (or click a category chip); logos are cached locally, so browsing works offline after the first run.
 - Up/Down/Left/Right (PageUp/PageDown) move the selection; Enter or click copies the logo in the active format and closes.
+- Ctrl+D opens the detail view of the selected logo (same as right-click); Esc returns to the grid.
 - Ctrl+F cycles the copy format — `svg` (raw source), `shadcn` (shadcn/ui registry command), `jsx`, `tsx` (React component, converted from the optimized svgl API source) — shown in the header, e.g. `tsx · 7 / 665`.
 - Right-click a logo to inspect it before copying: larger preview, category, website. In the detail view Enter copies in the active format, 1-4 pick a format directly, `w` opens the logo's website, Esc goes back.
 - Esc clears the search (or closes), clicking the backdrop closes, Ctrl+R re-fetches the catalog from svgl.app.
