@@ -1,0 +1,12 @@
+{
+	"schemaVersion": 1,
+	"id": "ussego.omiru",
+	"name": "Omiru",
+	"version": "1.0.0",
+	"author": "ussego",
+	"license": "MIT",
+	"description": "Omarchy overlay that searches the svgl.app logo library and copies SVGs to the clipboard.",
+	"kinds": ["overlay", "service"],
+	"keepLoaded": true,
+	"entryPoints": { "overlay": "Overlay.qml", "service": "Service.qml" }
+}
