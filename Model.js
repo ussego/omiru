@@ -349,6 +349,7 @@ function urlHost(url) {
   }
   var port = rest.lastIndexOf(":")
   if (port !== -1) rest = rest.slice(0, port)
+  if (rest.charAt(rest.length - 1) === ".") rest = rest.slice(0, -1)
   return rest.toLowerCase()
 }
 
@@ -369,15 +370,53 @@ function isNumericIpLike(host) {
   return false
 }
 
+function canonicalIpv6(host) {
+  var h = String(host || "").toLowerCase()
+  var tail = h.split(":").pop()
+  if (tail.indexOf(".") !== -1) {
+    var parts = tail.split(".")
+    if (parts.length !== 4) return null
+    var hi = (parseInt(parts[0], 10) << 8) + parseInt(parts[1], 10)
+    var lo = (parseInt(parts[2], 10) << 8) + parseInt(parts[3], 10)
+    if (isNaN(hi) || isNaN(lo)) return null
+    var hiHex = ("0000" + hi.toString(16)).slice(-4)
+    var loHex = ("0000" + lo.toString(16)).slice(-4)
+    h = h.slice(0, h.length - tail.length) + hiHex + ":" + loHex
+  }
+  var groups
+  var dbl = h.indexOf("::")
+  if (dbl !== -1) {
+    var sides = h.split("::")
+    if (sides.length !== 2) return null
+    var left = sides[0] === "" ? [] : sides[0].split(":")
+    var right = sides[1] === "" ? [] : sides[1].split(":")
+    var fill = 8 - left.length - right.length
+    if (fill < 1) return null
+    var mid = []
+    for (var f = 0; f < fill; f++) mid.push("0")
+    groups = left.concat(mid).concat(right)
+  } else {
+    groups = h.split(":")
+  }
+  if (groups.length !== 8) return null
+  var out = []
+  for (var j = 0; j < groups.length; j++) {
+    var g = groups[j]
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null
+    out.push(("0000" + g).slice(-4))
+  }
+  return out.join(":")
+}
+
 function isPrivateHost(host) {
   if (!host) return true
-  var mapped = /^(?:0*::)?ffff:(.*)$/i.exec(host)
-  if (mapped) {
-    var ipv4 = mapped[1]
-    if (ipv4.indexOf(":") !== -1) return true
-    return isPrivateHost(ipv4)
-  }
   if (host === "localhost" || host.slice(-10) === ".localhost") return true
+  var canon = canonicalIpv6(host)
+  if (canon) {
+    var first = canon.slice(0, 4)
+    if (first < "2000" || first > "3fff") return true
+    return false
+  }
   if (isNumericIpLike(host)) return true
   if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true
   if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true

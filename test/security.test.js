@@ -24,6 +24,16 @@ const blocked = [
   "http://localhost/x",
   "http://foo.localhost/x",
   "http://[::1]/x",
+  "http://[0:0:0:0:0:0:0:1]/",
+  "http://[0::1]/",
+  "http://[0000:0000:0000:0000:0000:0000:0000:0001]/",
+  "http://[0:0:0:0:0:0:0:0]/",
+  "http://[0:0:0:0:0:ffff:127.0.0.1]/",
+  "http://[0000:0000:0000:0000:0000:ffff:7f00:1]/",
+  "http://[::ffff:127.0.0.1]/",
+  "http://[::ffff:7f00:1]/",
+  "http://[fe80::1]/",
+  "http://[fc00::1]/",
   "https://0.0.0.0/x",
   "javascript:alert(1)",
   "http://evil.com@127.0.0.1:8080/",
@@ -33,8 +43,7 @@ const blocked = [
   "http://0x7f000001/",
   "http://0177.0.0.1/",
   "http://127.1/",
-  "http://[::ffff:127.0.0.1]/",
-  "http://[::ffff:7f00:1]/",
+  "http://127.0.0.1./",
   ""
 ]
 const allowed = [
@@ -43,7 +52,10 @@ const allowed = [
   "https://cdn.simpleicons.org/docker",
   "http://www.apache.org/foo",
   "https://8.8.8.8/",
-  "http://user:pass@example.com/x"
+  "http://user:pass@example.com/x",
+  "http://example.com./",
+  "http://[2606:4700::1111]/",
+  "http://[2001:4860:4860::8888]/"
 ]
 
 check("routeUrl rejects non-http(s) and private hosts", function() {
