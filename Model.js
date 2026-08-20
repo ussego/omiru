@@ -333,13 +333,53 @@ function filterLogos(logos, query, category, provider, limit) {
   return out
 }
 
-function routeUrl(route, preferDark) {
-  if (typeof route === "string") return route
-  if (route && typeof route === "object") {
-    if (preferDark && route.dark) return String(route.dark)
-    return String(route.light || route.dark || "")
+function urlHost(url) {
+  var u = String(url || "")
+  var m = /^https?:\/\//i.exec(u)
+  if (!m) return ""
+  var rest = u.slice(m[0].length)
+  var cut = rest.search(/[\/?#]/)
+  if (cut !== -1) rest = rest.slice(0, cut)
+  if (rest.charAt(0) === "[") {
+    var end = rest.indexOf("]")
+    if (end !== -1) return rest.slice(1, end).toLowerCase()
+    return rest.toLowerCase()
   }
-  return ""
+  var port = rest.lastIndexOf(":")
+  if (port !== -1) rest = rest.slice(0, port)
+  return rest.toLowerCase()
+}
+
+function isPrivateHost(host) {
+  if (!host) return true
+  if (host === "localhost" || host.slice(-10) === ".localhost") return true
+  if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true
+  if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true
+  if (/^192\.168\.\d+\.\d+$/.test(host)) return true
+  if (/^169\.254\.\d+\.\d+$/.test(host)) return true
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host)) return true
+  if (host === "0.0.0.0" || host === "::" || host === "::1") return true
+  if (host.indexOf("fe80:") === 0) return true
+  if (host.indexOf("fc") === 0 || host.indexOf("fd") === 0) return host.length > 2
+  return false
+}
+
+function safeUrl(url) {
+  var u = String(url || "")
+  if (!/^https?:\/\//i.test(u)) return ""
+  var host = urlHost(u)
+  if (isPrivateHost(host)) return ""
+  return u
+}
+
+function routeUrl(route, preferDark) {
+  var url = ""
+  if (typeof route === "string") url = route
+  else if (route && typeof route === "object") {
+    if (preferDark && route.dark) url = String(route.dark)
+    else url = String(route.light || route.dark || "")
+  }
+  return safeUrl(url)
 }
 
 function slugFor(url, fallbackId) {
@@ -404,9 +444,10 @@ function variantTag(logo, variant) {
 
 function assetUrl(logo, variant, format) {
   if (!logo) return ""
-  if (logo.provider === "dashboard") return dashboardAssetUrl(logo, variant, format)
-  if (format === "svg") return routeUrl(logo.route, variant === "dark")
-  return ""
+  var url = ""
+  if (logo.provider === "dashboard") url = dashboardAssetUrl(logo, variant, format)
+  else if (format === "svg") url = routeUrl(logo.route, variant === "dark")
+  return safeUrl(url)
 }
 
 function primaryKind(logo) {
@@ -417,8 +458,7 @@ function primaryKind(logo) {
 
 function primaryAssetUrl(logo, variant) {
   if (!logo) return ""
-  if (logo.provider === "dashboard") return assetUrl(logo, variant, primaryKind(logo))
-  return routeUrl(logo.route, variant === "dark")
+  return assetUrl(logo, variant, primaryKind(logo))
 }
 
 function logoCacheKey(logo, variant) {
@@ -431,7 +471,7 @@ function logoCacheKey(logo, variant) {
 function readSourceUrl(logo, variant) {
   if (!logo) return ""
   if (logo.provider === "dashboard") return assetUrl(logo, variant, "svg")
-  return SVGL_SVG_URL + slugFor(routeUrl(logo.route, variant === "dark"), logo.id)
+  return safeUrl(SVGL_SVG_URL + slugFor(routeUrl(logo.route, variant === "dark"), logo.id))
 }
 
 function providerActions(provider) {
@@ -547,14 +587,48 @@ function styleToObject(styleString) {
     var prop = parts[i].slice(0, colon).replace(/^\s+|\s+$/g, "")
     var value = parts[i].slice(colon + 1).replace(/^\s+|\s+$/g, "")
     if (!prop || !value) continue
+    value = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
     var camel = prop.replace(/-([a-z])/g, function(m, g) { return g.toUpperCase() })
     out.push('"' + camel + '": "' + value + '"')
   }
   return "{" + out.join(", ") + "}"
 }
 
+function escapeJsxText(svg) {
+  var s = String(svg || "")
+  var out = ""
+  var inTag = false
+  var inQuote = false
+  var quoteChar = ""
+  var i = 0
+  var len = s.length
+  while (i < len) {
+    var c = s.charAt(i)
+    if (inQuote) {
+      out += c
+      if (c === quoteChar) inQuote = false
+      i++
+      continue
+    }
+    if (inTag) {
+      out += c
+      if (c === '"' || c === "'") { inQuote = true; quoteChar = c }
+      else if (c === "<") { inTag = true }
+      else if (c === ">") inTag = false
+      i++
+      continue
+    }
+    if (c === "<") { inTag = true; out += c; i++; continue }
+    if (c === "{") { out += "&#123;"; i++; continue }
+    if (c === "}") { out += "&#125;"; i++; continue }
+    out += c
+    i++
+  }
+  return out
+}
+
 function cleanSvgForReact(svgCode) {
-  var svg = String(svgCode || "")
+  var svg = escapeJsxText(svgCode)
   svg = svg.replace(/<\?xml[^>]*\?>/g, "")
   svg = svg.replace(/<!DOCTYPE[^>]*>/gi, "")
   svg = svg.replace(/<!--[\s\S]*?-->/g, "")
@@ -614,6 +688,9 @@ if (typeof module !== "undefined") {
     isDark: isDark,
     variantModes: variantModes,
     resolveVariant: resolveVariant,
+    safeUrl: safeUrl,
+    styleToObject: styleToObject,
+    escapeJsxText: escapeJsxText,
     assetUrl: assetUrl,
     primaryKind: primaryKind,
     primaryAssetUrl: primaryAssetUrl,

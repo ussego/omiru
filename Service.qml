@@ -44,7 +44,9 @@ QtObject {
     provider.loading = true
     provider.status = "loading"
     provider.message = ""
-    provider.proc.command = ["curl", "-fsSL", "--max-time", "30", provider.def.catalogUrl]
+    provider.proc.command = ["curl", "-fsSL", "--max-time", "30", "--max-filesize", "33554432",
+      "--proto", "=http,https", "--proto-redir", "=http,https", "--max-redirs", "5",
+      provider.def.catalogUrl]
     provider.proc.running = true
     root.updateStatus()
   }
@@ -332,7 +334,7 @@ QtObject {
       var item = root.queue.shift()
       worker.item = item
       worker.command = ["bash", "-c",
-        'curl -fsSL --max-time 15 -o "$1" -- "$2" || exit 1\n'
+        'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1\n'
         + 'if [ "$3" != "png" ] && command -v rsvg-convert >/dev/null 2>&1 && rsvg-convert -w 192 -o "$1.png" "$1" 2>/dev/null; then\n'
         + '  exit 42\n'
         + 'fi\n'
@@ -368,7 +370,7 @@ QtObject {
     var path = root.libraryDir + "/" + key + (kind === "png" ? ".png" : ".svg")
     var mime = kind === "png" ? "image/png" : "text/plain"
     Quickshell.execDetached(["bash", "-c",
-      'if [ -f "$1" ]; then wl-copy --type "$3" < "$1"; else curl -fsSL --max-time 15 -- "$2" | wl-copy --type "$3"; fi',
+      'if [ -f "$1" ]; then wl-copy --type "$3" < "$1"; else curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$2" | wl-copy --type "$3"; fi',
       "omiru-copy", path, url, mime])
   }
 
@@ -379,7 +381,7 @@ QtObject {
     if (!url) return
     var path = root.libraryDir + "/" + key + "." + format
     Quickshell.execDetached(["bash", "-c",
-      'if [ ! -f "$1" ]; then curl -fsSL --max-time 15 -o "$1" -- "$2" || exit 1; fi\n'
+      'if [ ! -f "$1" ]; then curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1; fi\n'
       + 'wl-copy --type "image/' + format + '" < "$1"',
       "omiru-copy", path, url])
   }
@@ -410,7 +412,7 @@ QtObject {
     if (root.readProc.running) return
     root.readProc.request = { key: key, title: logo.title, format: format }
     root.readProc.command = ["bash", "-c",
-      'curl -fsSL --max-time 15 -- "$3" || { [ -f "$1" ] && cat -- "$1"; } || curl -fsSL --max-time 15 -- "$2"',
+      'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$3" || { [ -f "$1" ] && cat -- "$1"; } || curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$2"',
       "omiru-read", root.libraryDir + "/" + key + ".svg",
       Model.routeUrl(logo.route, variant === "dark"), Model.readSourceUrl(logo, variant)]
     root.readProc.running = true
@@ -429,12 +431,15 @@ QtObject {
 
   function copyText(value) {
     if (!value) return
+    value = String(value)
+    if (value.charAt(0) === "-") return
     Quickshell.execDetached(["wl-copy", value])
   }
 
   function openUrl(url) {
     if (!url) return
-    Quickshell.execDetached(["xdg-open", url])
+    if (!/^https?:\/\//i.test(String(url))) return
+    Quickshell.execDetached(["xdg-open", String(url)])
   }
 
   property Process initProc: Process {
