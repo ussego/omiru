@@ -450,8 +450,11 @@ function isPrivateHost(host) {
   if (host === "localhost" || host.slice(-10) === ".localhost") return true
   var canon = canonicalIpv6(host)
   if (canon) {
-    var first = canon.slice(0, 4)
+    var groups = canon.split(":")
+    var first = groups[0]
     if (first < "2000" || first > "3fff") return true
+    if (first === "2002") return true
+    if (first === "2001" && groups[1] === "0000") return true
     return false
   }
   if (isNumericIpLike(host)) return true
@@ -464,6 +467,8 @@ function hasDangerousChars(url) {
   for (var i = 0; i < u.length; i++) {
     var code = u.charCodeAt(i)
     if (code <= 0x20 || code === 0x7f) return true
+    if (code === 0x5c) return true
+    if (code === 0x3002 || code === 0xff0e || code === 0xff61 || code === 0xff0f) return true
     if (code === 0x85 || code === 0xa0) return true
     if (code >= 0x2000 && code <= 0x200a) return true
     if (code === 0x2028 || code === 0x2029 || code === 0x202f || code === 0x205f || code === 0x3000) return true
