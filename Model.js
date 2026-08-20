@@ -344,12 +344,17 @@ function urlHost(url) {
   if (at !== -1) rest = rest.slice(at + 1)
   if (rest.charAt(0) === "[") {
     var end = rest.indexOf("]")
-    if (end !== -1) return rest.slice(1, end).toLowerCase()
+    if (end !== -1) {
+      var inner = rest.slice(1, end)
+      var zone = inner.indexOf("%")
+      if (zone !== -1) inner = inner.slice(0, zone)
+      return inner.toLowerCase()
+    }
     return rest.toLowerCase()
   }
   var port = rest.lastIndexOf(":")
   if (port !== -1) rest = rest.slice(0, port)
-  if (rest.charAt(rest.length - 1) === ".") rest = rest.slice(0, -1)
+  rest = rest.replace(/\.+$/, "")
   return rest.toLowerCase()
 }
 
@@ -410,6 +415,7 @@ function canonicalIpv6(host) {
 
 function isPrivateHost(host) {
   if (!host) return true
+  if (host.indexOf("%") !== -1) return true
   if (host === "localhost" || host.slice(-10) === ".localhost") return true
   var canon = canonicalIpv6(host)
   if (canon) {
