@@ -38,6 +38,8 @@ o.bind("SUPER + CTRL + G", "Search SVG logos", "omarchy-shell shell toggle usseg
 
 Provider enable/disable is persisted in `~/.config/omarchy/omiru.json` and applied live. The chip row shows only enabled providers; manage all of them (including new ones) in the **Ctrl+T** dialog.
 
+Omiru fetches the icon catalogs over HTTPS from `api.svgl.app` and `dashboardicons.com`, and downloads icon assets from their CDNs (`cdn.jsdelivr.net`, `cdn.simpleicons.org`, and the per-logo URLs published in those catalogs). Icon files are cached under `~/.local/state/omarchy/omiru`.
+
 ## Removal
 
 ```sh
