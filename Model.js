@@ -340,6 +340,8 @@ function urlHost(url) {
   var rest = u.slice(m[0].length)
   var cut = rest.search(/[\/?#]/)
   if (cut !== -1) rest = rest.slice(0, cut)
+  var at = rest.lastIndexOf("@")
+  if (at !== -1) rest = rest.slice(at + 1)
   if (rest.charAt(0) === "[") {
     var end = rest.indexOf("]")
     if (end !== -1) return rest.slice(1, end).toLowerCase()
@@ -350,9 +352,33 @@ function urlHost(url) {
   return rest.toLowerCase()
 }
 
+function isNumericIpLike(host) {
+  if (/^\d+$/.test(host)) return true
+  if (/0x[0-9a-f]/i.test(host)) return true
+  var parts = host.split(".")
+  if (parts.length >= 2 && parts.length <= 4) {
+    var allNumeric = true
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i]
+      if (!/^\d+$/.test(p)) { allNumeric = false; break }
+      if (p.length > 1 && p.charAt(0) === "0") return true
+    }
+    if (allNumeric && parts.length < 4) return true
+    if (allNumeric) return false
+  }
+  return false
+}
+
 function isPrivateHost(host) {
   if (!host) return true
+  var mapped = /^(?:0*::)?ffff:(.*)$/i.exec(host)
+  if (mapped) {
+    var ipv4 = mapped[1]
+    if (ipv4.indexOf(":") !== -1) return true
+    return isPrivateHost(ipv4)
+  }
   if (host === "localhost" || host.slice(-10) === ".localhost") return true
+  if (isNumericIpLike(host)) return true
   if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true
   if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true
   if (/^192\.168\.\d+\.\d+$/.test(host)) return true
@@ -600,6 +626,9 @@ function escapeJsxText(svg) {
   var inTag = false
   var inQuote = false
   var quoteChar = ""
+  var inStyle = false
+  var name = ""
+  var readingName = false
   var i = 0
   var len = s.length
   while (i < len) {
@@ -613,14 +642,29 @@ function escapeJsxText(svg) {
     if (inTag) {
       out += c
       if (c === '"' || c === "'") { inQuote = true; quoteChar = c }
-      else if (c === "<") { inTag = true }
-      else if (c === ">") inTag = false
+      else if (c === "<") { inTag = true; name = ""; readingName = true }
+      else if (c === ">") {
+        inTag = false
+        if (name === "style") inStyle = !inStyle
+      } else if (readingName) {
+        if (name === "" && c === "/") {}
+        else if (/[A-Za-z0-9]/.test(c)) name += c
+        else readingName = false
+      }
       i++
       continue
     }
-    if (c === "<") { inTag = true; out += c; i++; continue }
-    if (c === "{") { out += "&#123;"; i++; continue }
-    if (c === "}") { out += "&#125;"; i++; continue }
+    if (c === "<") {
+      inTag = true
+      readingName = true
+      name = ""
+      out += c
+      i++
+      continue
+    }
+    if (inStyle) { out += c; i++; continue }
+    if (c === "{") { out += "{'{'}"; i++; continue }
+    if (c === "}") { out += "{'}'}"; i++; continue }
     out += c
     i++
   }
@@ -628,18 +672,19 @@ function escapeJsxText(svg) {
 }
 
 function cleanSvgForReact(svgCode) {
-  var svg = escapeJsxText(svgCode)
+  var svg = String(svgCode || "")
+  svg = svg.replace(/<!\[CDATA\[/g, "")
+  svg = svg.replace(/\]\]>/g, "")
+  svg = escapeJsxText(svg)
   svg = svg.replace(/<\?xml[^>]*\?>/g, "")
   svg = svg.replace(/<!DOCTYPE[^>]*>/gi, "")
   svg = svg.replace(/<!--[\s\S]*?-->/g, "")
   svg = svg.replace(/<metadata[\s\S]*?<\/metadata>/g, "")
   svg = svg.replace(/<sodipodi:namedview[\s\S]*?<\/sodipodi:namedview>/gi, "")
-  svg = svg.replace(/<style([^>]*)>([\s\S]*?)<\/style>/g, function(m, attrs, content) {
+  svg = svg.replace(/<\s*style([^>]*)>([\s\S]*?)<\/\s*style>/g, function(m, attrs, content) {
     var cleaned = content.replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "")
     return "<style" + attrs + ">{" + JSON.stringify(cleaned) + "}</style>"
   })
-  svg = svg.replace(/<!\[CDATA\[/g, "")
-  svg = svg.replace(/\]\]>/g, "")
   svg = svg.replace(/\s+(osb|dc|cc|rdf|svg|sodipodi|inkscape):[A-Za-z-]+="[^"]*"/g, "")
   svg = svg.replace(/\s+xmlns:(?!xlink)[A-Za-z-]+="[^"]*"/g, "")
   return svg

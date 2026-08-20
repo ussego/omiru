@@ -26,13 +26,24 @@ const blocked = [
   "http://[::1]/x",
   "https://0.0.0.0/x",
   "javascript:alert(1)",
+  "http://evil.com@127.0.0.1:8080/",
+  "http://user:pass@10.0.0.1/x",
+  "http://evil.com@[::1]:8080/x",
+  "http://2130706433/",
+  "http://0x7f000001/",
+  "http://0177.0.0.1/",
+  "http://127.1/",
+  "http://[::ffff:127.0.0.1]/",
+  "http://[::ffff:7f00:1]/",
   ""
 ]
 const allowed = [
   "https://api.svgl.app",
   "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/x.svg",
   "https://cdn.simpleicons.org/docker",
-  "http://www.apache.org/foo"
+  "http://www.apache.org/foo",
+  "https://8.8.8.8/",
+  "http://user:pass@example.com/x"
 ]
 
 check("routeUrl rejects non-http(s) and private hosts", function() {
@@ -73,10 +84,21 @@ check("style object escapes quotes and backslashes", function() {
   assert.ok(out.indexOf("q\\\\") !== -1, "backslash doubled: " + out)
 })
 
-check("text-node braces are entity-encoded in JSX output", function() {
+check("text-node braces are neutralized in JSX output", function() {
   const out = M.toReactComponent('<svg xmlns="http://www.w3.org/2000/svg"><text>{payload()}</text></svg>', "evil", false)
   assert.ok(out.indexOf("{payload()}") === -1, "raw expression must not survive")
-  assert.ok(out.indexOf("&#123;payload()&#125;") !== -1, "braces entity-encoded")
+  assert.ok(out.indexOf("{'{'}payload(){'}'}") !== -1, "braces encoded as literal-brace expressions")
+})
+
+check("CDATA-bracketed expressions are neutralized", function() {
+  const out = M.toReactComponent('<svg xmlns="http://www.w3.org/2000/svg"><text><![CDATA[{payload()}]]></text></svg>', "evil", false)
+  assert.ok(out.indexOf("{payload()}") === -1, "raw expression must not survive CDATA")
+  assert.ok(out.indexOf("{'{'}payload(){'}'}") !== -1, "CDATA braces encoded")
+})
+
+check("style content braces are preserved for CSS", function() {
+  const out = M.toReactComponent('<svg xmlns="http://www.w3.org/2000/svg"><style>a { fill: red }</style></svg>', "evil", false)
+  assert.ok(out.indexOf("a { fill: red }") !== -1, "style CSS kept intact")
 })
 
 check("slugFor collapses traversal and keeps safe filename", function() {

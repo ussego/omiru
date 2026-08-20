@@ -370,7 +370,7 @@ QtObject {
     var path = root.libraryDir + "/" + key + (kind === "png" ? ".png" : ".svg")
     var mime = kind === "png" ? "image/png" : "text/plain"
     Quickshell.execDetached(["bash", "-c",
-      'if [ -f "$1" ]; then wl-copy --type "$3" < "$1"; else curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$2" | wl-copy --type "$3"; fi',
+      'if [ -f "$1" ]; then wl-copy --type "$3" < "$1"; else curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -- "$2" | wl-copy --type "$3"; fi',
       "omiru-copy", path, url, mime])
   }
 
@@ -412,7 +412,7 @@ QtObject {
     if (root.readProc.running) return
     root.readProc.request = { key: key, title: logo.title, format: format }
     root.readProc.command = ["bash", "-c",
-      'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$3" || { [ -f "$1" ] && cat -- "$1"; } || curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 -- "$2"',
+      'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -- "$3" || { [ -f "$1" ] && cat -- "$1"; } || curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -- "$2"',
       "omiru-read", root.libraryDir + "/" + key + ".svg",
       Model.routeUrl(logo.route, variant === "dark"), Model.readSourceUrl(logo, variant)]
     root.readProc.running = true
