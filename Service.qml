@@ -438,7 +438,7 @@ QtObject {
 
   function openUrl(url) {
     if (!url) return
-    if (!/^https?:\/\//i.test(String(url))) return
+    if (!Model.safeUrl(url)) return
     Quickshell.execDetached(["xdg-open", String(url)])
   }
 

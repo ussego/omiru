@@ -345,15 +345,18 @@ function urlHost(url) {
   if (rest.charAt(0) === "[") {
     var end = rest.indexOf("]")
     if (end !== -1) {
+      var after = rest.slice(end + 1)
+      if (after !== "" && after.charAt(0) !== ":") return ""
       var inner = rest.slice(1, end)
       var zone = inner.indexOf("%")
       if (zone !== -1) inner = inner.slice(0, zone)
       return inner.toLowerCase()
     }
-    return rest.toLowerCase()
+    return ""
   }
   var port = rest.lastIndexOf(":")
   if (port !== -1) rest = rest.slice(0, port)
+  if (rest.indexOf(":") !== -1) return ""
   rest = rest.replace(/\.+$/, "")
   return rest.toLowerCase()
 }
@@ -413,6 +416,34 @@ function canonicalIpv6(host) {
   return out.join(":")
 }
 
+function ipv4Private(host) {
+  var parts = host.split(".")
+  if (parts.length !== 4) return false
+  var nums = []
+  for (var i = 0; i < 4; i++) {
+    if (!/^\d{1,3}$/.test(parts[i])) return false
+    var v = parseInt(parts[i], 10)
+    if (v > 255) return false
+    nums.push(v)
+  }
+  var a = nums[0], b = nums[1], c = nums[2], d = nums[3]
+  if (a === 0) return true
+  if (a === 10) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  if (a === 127) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 0 && c === 0) return true
+  if (a === 192 && b === 0 && c === 2) return true
+  if (a === 192 && b === 88 && c === 99) return true
+  if (a === 192 && b === 168) return true
+  if (a === 198 && (b === 18 || b === 19)) return true
+  if (a === 198 && b === 51 && c === 100) return true
+  if (a === 203 && b === 0 && c === 113) return true
+  if (a >= 224) return true
+  return false
+}
+
 function isPrivateHost(host) {
   if (!host) return true
   if (host.indexOf("%") !== -1) return true
@@ -424,19 +455,25 @@ function isPrivateHost(host) {
     return false
   }
   if (isNumericIpLike(host)) return true
-  if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true
-  if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true
-  if (/^192\.168\.\d+\.\d+$/.test(host)) return true
-  if (/^169\.254\.\d+\.\d+$/.test(host)) return true
-  if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host)) return true
-  if (host === "0.0.0.0" || host === "::" || host === "::1") return true
-  if (host.indexOf("fe80:") === 0) return true
-  if (host.indexOf("fc") === 0 || host.indexOf("fd") === 0) return host.length > 2
+  if (ipv4Private(host)) return true
+  return false
+}
+
+function hasDangerousChars(url) {
+  var u = String(url || "")
+  for (var i = 0; i < u.length; i++) {
+    var code = u.charCodeAt(i)
+    if (code <= 0x20 || code === 0x7f) return true
+    if (code === 0x85 || code === 0xa0) return true
+    if (code >= 0x2000 && code <= 0x200a) return true
+    if (code === 0x2028 || code === 0x2029 || code === 0x202f || code === 0x205f || code === 0x3000) return true
+  }
   return false
 }
 
 function safeUrl(url) {
   var u = String(url || "")
+  if (hasDangerousChars(u)) return ""
   if (!/^https?:\/\//i.test(u)) return ""
   var host = urlHost(u)
   if (isPrivateHost(host)) return ""
