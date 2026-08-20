@@ -31,7 +31,7 @@ Add to `~/.config/hypr/bindings.lua`:
 
 ```lua
 hl.unbind("SUPER + CTRL + G")
-o.bind("SUPER + CTRL + G", "Search SVG logos", "omarchy-shell shell toggle ussego.omiru")
+o.bind("SUPER + CTRL + G", "Icon picker", "omarchy-shell shell toggle ussego.omiru")
 ```
 
 ## Providers & configuration
