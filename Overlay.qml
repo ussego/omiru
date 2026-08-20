@@ -125,6 +125,13 @@ Item {
     }
     return false
   })()
+  readonly property bool showProviderBadges: root.providerFilter === "all" && root.svc !== null && (function() {
+    var n = 0
+    for (var i = 0; i < root.svc.providers.length; i++) {
+      if (root.svc.providers[i].enabled) n++
+    }
+    return n > 1
+  })()
   readonly property bool catalogError: root.svc !== null && root.svc.status === "error" && root.svc.logos.length === 0
   readonly property string stateMessage: root.catalogLoading
     ? "Loading icons…"
@@ -135,16 +142,23 @@ Item {
   function open(payloadJson) {
     var payload = {}
     try { payload = JSON.parse(payloadJson || "{}") || {} } catch (e) {}
-    root.opened = true
-    root.filterText = typeof payload.query === "string" ? payload.query : ""
-    root.categoryName = typeof payload.category === "string" && payload.category ? payload.category : "all"
-    root.providerFilter = typeof payload.provider === "string" && payload.provider
-    ? payload.provider
-    : (root.svc ? root.svc.filter : "all")
+    var query = typeof payload.query === "string" ? payload.query : ""
+    var category = typeof payload.category === "string" && payload.category ? payload.category : "all"
+    var provider = typeof payload.provider === "string" && payload.provider
+      ? payload.provider
+      : (root.svc ? root.svc.filter : "all")
+    var changed = query !== root.filterText
+      || category !== root.categoryName
+      || provider !== root.providerFilter
+      || root.detail !== null
+    root.filterText = query
+    root.categoryName = category
+    root.providerFilter = provider
     root.detail = null
     root.selectedIndex = 0
     root.cursorActive = true
-    root.rebuildDisplay()
+    if (changed) root.rebuildDisplay()
+    root.opened = true
     Qt.callLater(function() { if (root.opened) keyCatcher.forceActiveFocus() })
   }
 
@@ -192,18 +206,15 @@ Item {
     var out = Model.filterLogos(logos, root.filterText, root.categoryName, root.providerFilter, 10000)
     root.visibleLogos = out
 
-    displayModel.clear()
-    for (var j = 0; j < out.length; j++) displayModel.append({ title: out[j].title })
-
-    if (displayModel.count === 0) root.selectedIndex = 0
-    else if (root.selectedIndex >= displayModel.count) root.selectedIndex = displayModel.count - 1
+    if (root.visibleLogos.length === 0) root.selectedIndex = 0
+    else if (root.selectedIndex >= root.visibleLogos.length) root.selectedIndex = root.visibleLogos.length - 1
     else if (root.selectedIndex < 0) root.selectedIndex = 0
-    root.cursorActive = displayModel.count > 0
+    root.cursorActive = root.visibleLogos.length > 0
     root.syncSelection()
     root.clampAction()
 
     Qt.callLater(function() {
-      if (displayModel.count > 0) logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
+      if (root.visibleLogos.length > 0) logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
     })
   }
 
@@ -414,43 +425,43 @@ Item {
   }
 
   function select(delta) {
-    if (displayModel.count === 0) return
+    if (root.visibleLogos.length === 0) return
     if (!root.cursorActive) {
       root.cursorActive = true
-      root.selectedIndex = delta < 0 ? displayModel.count - 1 : 0
+      root.selectedIndex = delta < 0 ? root.visibleLogos.length - 1 : 0
     } else {
-      root.selectedIndex = (root.selectedIndex + delta + displayModel.count) % displayModel.count
+      root.selectedIndex = (root.selectedIndex + delta + root.visibleLogos.length) % root.visibleLogos.length
     }
     logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
   }
 
   function selectRow(delta) {
-    if (displayModel.count === 0) return
+    if (root.visibleLogos.length === 0) return
     if (!root.cursorActive) {
       root.cursorActive = true
-      root.selectedIndex = delta < 0 ? displayModel.count - 1 : 0
+      root.selectedIndex = delta < 0 ? root.visibleLogos.length - 1 : 0
       logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
       return
     }
     var newIndex = root.selectedIndex + delta * root.columns
     if (newIndex < 0) newIndex = 0
-    if (newIndex >= displayModel.count) newIndex = displayModel.count - 1
+    if (newIndex >= root.visibleLogos.length) newIndex = root.visibleLogos.length - 1
     root.selectedIndex = newIndex
     logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
   }
 
   function selectPage(delta) {
-    if (displayModel.count === 0) return
+    if (root.visibleLogos.length === 0) return
     if (!root.cursorActive) {
       root.cursorActive = true
-      root.selectedIndex = delta < 0 ? displayModel.count - 1 : 0
+      root.selectedIndex = delta < 0 ? root.visibleLogos.length - 1 : 0
       logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
       return
     }
     var visibleRows = Math.max(1, Math.floor(logosGrid.height / root.cellHeight))
     var newIndex = root.selectedIndex + delta * root.columns * visibleRows
     if (newIndex < 0) newIndex = 0
-    if (newIndex >= displayModel.count) newIndex = displayModel.count - 1
+    if (newIndex >= root.visibleLogos.length) newIndex = root.visibleLogos.length - 1
     root.selectedIndex = newIndex
     logosGrid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
   }
@@ -661,6 +672,7 @@ Item {
 
   function logoSource(logo, variant) {
     if (!logo || !root.svc) return ""
+    var revision = root.svc.readyRevision
     var key = root.logoKey(logo, variant)
     var state = root.svc.ready[key]
     if (!state) return ""
@@ -680,8 +692,6 @@ Item {
   onSelectedIndexChanged: { root.syncSelection(); root.clampAction() }
   onDetailChanged: { root.syncSelection(); root.clampAction() }
   onCategorySearchChanged: root.categoryPickIndex = 0
-
-  ListModel { id: displayModel }
 
   property Timer filterTimer: Timer {
     interval: 70
@@ -915,6 +925,17 @@ Item {
             spacing: Style.space(14)
 
             Text {
+              visible: root.svc ? root.svc.indexing : false
+              height: Style.space(26)
+              verticalAlignment: Text.AlignVCenter
+              text: "Indexing " + Math.min(99, Math.round((root.svc ? root.svc.indexProgress : 0) * 100)) + "%"
+              color: root.foreground
+              opacity: 0.35
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
               height: Style.space(26)
               verticalAlignment: Text.AlignVCenter
               text: (root.svc && root.svc.status === "loading" ? "󰑓 " : "")
@@ -1085,21 +1106,21 @@ Item {
             anchors.top: parent.top
             anchors.bottom: gridHint.top
             anchors.bottomMargin: Style.space(6)
-            model: displayModel
+            model: root.visibleLogos
             clip: true
             cellWidth: root.cellWidth
             cellHeight: root.cellHeight
+            cacheBuffer: root.cellHeight * 2
             boundsBehavior: Flickable.StopAtBounds
 
             delegate: Rectangle {
               required property int index
-              required property string title
 
               readonly property bool hasCursor: root.cursorActive && index === root.selectedIndex
               readonly property var logo: root.logoAt(index)
               readonly property string gridVariant: root.gridVariant(logo)
               readonly property string logoKey: root.logoKey(logo, gridVariant)
-              readonly property bool logoReady: root.svc !== null && Boolean(root.svc.ready[logoKey])
+              readonly property bool logoReady: root.svc !== null && (root.svc.readyRevision, Boolean(root.svc.ready[logoKey]))
 
               width: root.cellWidth
               height: root.cellHeight
@@ -1118,8 +1139,8 @@ Item {
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 asynchronous: true
-                sourceSize.width: 192
-                sourceSize.height: 192
+                sourceSize.width: 128
+                sourceSize.height: 128
                 source: root.logoSource(logo, gridVariant)
               }
 
@@ -1140,13 +1161,37 @@ Item {
                 anchors.topMargin: Style.space(6)
                 anchors.leftMargin: Style.space(4)
                 anchors.rightMargin: Style.space(4)
-                text: title
+                text: logo ? logo.title : ""
                 color: hasCursor ? root.selectedText : root.foreground
                 opacity: 0.75
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
+              }
+
+              Rectangle {
+                visible: root.showProviderBadges
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Style.space(3)
+                width: badgeText.implicitWidth + Style.space(8)
+                height: badgeText.implicitHeight + Style.space(3)
+                radius: Math.round(height / 2)
+                color: hasCursor ? root.selectedBackground : root.background
+
+                Text {
+                  id: badgeText
+                  anchors.centerIn: parent
+                  text: (function() {
+                    var p = root.providerFor(logo)
+                    return p && p.def ? p.def.shortName : ""
+                  })()
+                  color: hasCursor ? root.selectedText : root.foreground
+                  opacity: 0.6
+                  font.family: root.fontFamily
+                  font.pixelSize: Math.max(7, Math.round(Style.font.caption * 0.62))
+                }
               }
 
               MouseArea {
@@ -1206,7 +1251,7 @@ Item {
               }
 
               Text {
-                visible: root.detail !== null && !(root.svc && root.svc.ready[root.logoKey(root.detail, root.detailVariant)])
+                visible: root.detail !== null && !(root.svc && (root.svc.readyRevision, root.svc.ready[root.logoKey(root.detail, root.detailVariant)]))
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "󰋩"
                 color: root.foreground
@@ -1410,7 +1455,7 @@ Item {
           Column {
             anchors.centerIn: parent
             spacing: Style.space(8)
-            visible: displayModel.count === 0 && root.detail === null
+            visible: root.visibleLogos.length === 0 && root.detail === null
 
             Text {
               visible: !root.catalogLoading && !root.catalogError

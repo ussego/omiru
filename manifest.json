@@ -2,10 +2,10 @@
 	"schemaVersion": 1,
 	"id": "ussego.omiru",
 	"name": "Omiru",
-	"version": "1.2.0",
+	"version": "2.0.0",
 	"author": "ussego",
 	"license": "MIT",
-	"description": "Omarchy overlay that searches the svgl.app and dashboard-icons logo libraries and copies icons to the clipboard.",
+	"description": "Icon picker for Omarchy: search and copy icons to the clipboard.",
 	"kinds": ["overlay", "service"],
 	"keepLoaded": true,
 	"entryPoints": { "overlay": "Overlay.qml", "service": "Service.qml" }

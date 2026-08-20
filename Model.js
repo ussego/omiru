@@ -25,6 +25,7 @@ function providerDefs() {
     {
       id: "dashboard",
       name: "dashboard icons",
+      shortName: "dash",
       defaultEnabled: true,
       catalogUrl: DASHBOARD_SEARCH_URL,
       cacheFile: "dashboard.json",
@@ -34,6 +35,7 @@ function providerDefs() {
     {
       id: "svgl",
       name: "svgl",
+      shortName: "svgl",
       defaultEnabled: true,
       catalogUrl: SVGL_API_URL,
       cacheFile: "svgl.json",
@@ -124,6 +126,73 @@ function parseProvider(providerId, raw) {
   return parseSvgl(raw)
 }
 
+function parseProviderCache(providerId, raw) {
+  var text = String(raw || "")
+  var lines = text.split("\n")
+  if (lines.length < 2) return null
+  var meta
+  try { meta = JSON.parse(lines[0]) } catch (e) { return null }
+  if (!meta || typeof meta !== "object" || !("fetchedAt" in meta)) return null
+  var logos = []
+  for (var i = 1; i < lines.length; i++) {
+    var line = lines[i]
+    if (!line) continue
+    var entry
+    try { entry = JSON.parse(line) } catch (e) { continue }
+    if (!entry || typeof entry !== "object") continue
+    var logo = providerId === "dashboard" ? dashEntryLogo(entry) : svglEntryLogo(entry, logos.length)
+    if (logo) logos.push(logo)
+  }
+  return { fetchedAt: Number(meta.fetchedAt) || 0, logos: logos }
+}
+
+function dashEntryLogo(entry) {
+  var slug = String(entry.s || "").trim()
+  if (!slug) return null
+  var aliases = Array.isArray(entry.a) ? entry.a.map(String) : []
+  var title = titleCase(String(entry.n || "").trim() || (aliases.length > 0 ? aliases[0] : slug))
+  var source = String(entry.r || "native").toLowerCase()
+  var base = String(entry.b || "")
+  var formats
+  if (source === "simpleicons") formats = ["svg"]
+  else if (source === "selfhst" || source === "lobehub") {
+    formats = Array.isArray(entry.f) ? entry.f.map(String) : []
+    if (formats.length === 0) formats = ["svg", "png", "webp"]
+  } else {
+    formats = base === "png" ? ["png", "webp"] : ["svg", "png", "webp"]
+  }
+  return {
+    provider: "dashboard",
+    source: source,
+    id: slug,
+    slug: slug,
+    title: title,
+    search: (title + " " + slug + " " + aliases.join(" ") + " " + source).trim().toLowerCase(),
+    categories: categoryList(entry.c),
+    formats: formats,
+    hasSvg: formats.indexOf("svg") !== -1,
+    templates: entry.m && typeof entry.m === "object" ? entry.m : null,
+    brand: typeof entry.k === "string" ? entry.k : "",
+    url: DASHBOARD_WEBSITE,
+    brandUrl: ""
+  }
+}
+
+function svglEntryLogo(entry, index) {
+  var title = titleCase(entry.t)
+  if (!title || !entry.r) return null
+  return {
+    provider: "svgl",
+    id: Number(entry.i) || index,
+    title: title,
+    search: String(title).toLowerCase(),
+    categories: categoryList(entry.c),
+    route: entry.r,
+    url: String(entry.u || ""),
+    brandUrl: String(entry.b || "")
+  }
+}
+
 function normalizeCategory(name) {
   return String(name || "").trim().toLowerCase().replace(/-/g, " ")
 }
@@ -207,7 +276,7 @@ function normalizeLogos(svgs, providerId) {
       provider: providerId,
       id: Number(item.id) || out.length,
       title: title,
-      search: title,
+      search: String(title).toLowerCase(),
       categories: categoryList(item.category),
       route: item.route,
       url: String(item.url || ""),
@@ -251,7 +320,7 @@ function normalizeDashboardLogos(entries) {
       id: slug,
       slug: slug,
       title: title,
-      search: (title + " " + slug + " " + clean.join(" ") + " " + source).trim(),
+      search: (title + " " + slug + " " + clean.join(" ") + " " + source).trim().toLowerCase(),
       categories: categoryList(data.categories),
       formats: formats,
       hasSvg: formats.indexOf("svg") !== -1,
@@ -307,7 +376,7 @@ function matchesCategory(logo, category) {
   var cats = logo.categories
   if (cats.length === 0) return wanted === "uncategorized"
   for (var i = 0; i < cats.length; i++) {
-    if (cats[i].toLowerCase() === wanted) return true
+    if (cats[i] === wanted) return true
   }
   return false
 }
@@ -326,7 +395,7 @@ function filterLogos(logos, query, category, provider, limit) {
     if (!logo || !logo.title) continue
     if (!matchesCategory(logo, category)) continue
     if (provider && String(provider).toLowerCase() !== "all" && logo.provider !== provider) continue
-    if (needle && (logo.search || logo.title).toLowerCase().indexOf(needle) === -1) continue
+    if (needle && (logo.search || String(logo.title || "").toLowerCase()).indexOf(needle) === -1) continue
     out.push(logo)
     if (out.length >= max) break
   }
@@ -820,6 +889,7 @@ if (typeof module !== "undefined") {
     parseConfig: parseConfig,
     normalizeFilter: normalizeFilter,
     parseProvider: parseProvider,
+    parseProviderCache: parseProviderCache,
     normalizeFor: normalizeFor,
     categoriesOf: categoriesOf,
     filterLogos: filterLogos,

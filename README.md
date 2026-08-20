@@ -1,6 +1,6 @@
 # Omiru
 
-Search the [svgl.app](https://svgl.app) and [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) logo libraries and copy logos to the clipboard — an overlay for the Omarchy shell.
+The icon picker for Omarchy: browse the [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) and [svgl.app](https://svgl.app) logo libraries and copy icons to the clipboard.
 
 ![omiru overlay](preview.png)
 
@@ -38,7 +38,7 @@ o.bind("SUPER + CTRL + G", "Search SVG logos", "omarchy-shell shell toggle usseg
 
 Provider enable/disable is persisted in `~/.config/omarchy/omiru.json` and applied live. The chip row shows only enabled providers; manage all of them (including new ones) in the **Ctrl+T** dialog.
 
-Omiru fetches the icon catalogs over HTTPS from `api.svgl.app` and `dashboardicons.com`, and downloads icon assets from their CDNs (`cdn.jsdelivr.net`, `cdn.simpleicons.org`, and the per-logo URLs published in those catalogs). Icon files are cached under `~/.local/state/omarchy/omiru`.
+Omiru fetches the icon catalogs over HTTPS from `api.svgl.app` and `dashboardicons.com`, and downloads icon assets from their CDNs (`cdn.jsdelivr.net`, `cdn.simpleicons.org`, and the per-logo URLs published in those catalogs). Icon files are cached under `~/.local/state/omarchy/omiru`. The full library uses roughly 230 MB on disk; icons are downloaded once and cached, so this is a one-time cost per catalog. `rm -rf` that directory at any time to force a re-download.
 
 ## Removal
 
@@ -54,4 +54,4 @@ rm -rf ~/.config/omarchy/omiru.json ~/.local/state/omarchy/omiru
 
 ## Dependencies
 
-`curl`, `wl-copy` (wl-clipboard), and `rsvg-convert` (librsvg) — all shipped with Omarchy.
+`curl`, `wl-copy` (wl-clipboard), and `rsvg-convert` (librsvg) — all shipped with Omarchy. `python3` is optional: when present, catalog downloads are compacted in a short-lived helper process so the shell keeps a much smaller memory footprint; without it Omiru falls back to internal parsing.

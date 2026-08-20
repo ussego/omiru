@@ -14,6 +14,7 @@ QtObject {
   property string message: ""
   property string filter: "all"
   property var ready: ({})
+  property int readyRevision: 0
   property int downloads: 0
 
   property bool expectedStop: false
@@ -27,8 +28,57 @@ QtObject {
   readonly property string libraryDir: root.stateDir + "/library"
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/omiru.json"
   readonly property int cacheMaxAgeMs: 30 * 60 * 1000
-  readonly property int workerCount: 8
+  readonly property int workerCount: 12
   property bool preferDark: false
+  property bool hasPython3: false
+  property int expectedTotal: 0
+  property bool indexing: false
+  property real indexProgress: 0
+
+  property string catalogTransform: [
+    "import json,sys,time",
+    "raw=sys.stdin.read()",
+    "data=json.loads(raw)",
+    "items=data.get(\"items\",data) if isinstance(data,dict) else data",
+    "items=items if isinstance(items,list) else list(data.values()) if isinstance(data,dict) else []",
+    "print(json.dumps({\"fetchedAt\":int(time.time()*1000)},separators=(\",\",\":\")))",
+    "pid=sys.argv[1] if len(sys.argv)>1 else \"\"",
+    "if pid==\"dashboard\":",
+    "    for it in items:",
+    "        if not isinstance(it,dict): continue",
+    "        d=it.get(\"data\") or {}",
+    "        slug=str(it.get(\"slug\") or it.get(\"id\") or \"\").strip()",
+    "        if not slug: continue",
+    "        aliases=[str(a).strip() for a in (d.get(\"aliases\") or []) if str(a).strip()]",
+    "        name=str(it.get(\"name\") or \"\").strip() or (aliases[0] if aliases else slug)",
+    "        cats=[str(c) for c in (d.get(\"categories\") or [])]",
+    "        src=str(it.get(\"source\") or \"native\").lower()",
+    "        base=str(d.get(\"base\") or \"\")",
+    "        ext=it.get(\"external\") or {}",
+    "        fmts=[str(f) for f in (ext.get(\"formats\") or [])]",
+    "        tpl=ext.get(\"url_templates\")",
+    "        tpl=tpl if isinstance(tpl,dict) else None",
+    "        brand=str(ext.get(\"brand_color\") or \"\")",
+    "        print(json.dumps({\"s\":slug,\"n\":name,\"a\":aliases,\"c\":cats,\"r\":src,\"b\":base,\"f\":fmts,\"m\":tpl,\"k\":brand},separators=(\",\",\":\")))",
+    "else:",
+    "    for it in items:",
+    "        if not isinstance(it,dict): continue",
+    "        print(json.dumps({\"i\":it.get(\"id\"),\"t\":str(it.get(\"title\") or \"\").strip(),\"c\":it.get(\"category\"),\"r\":str(it.get(\"route\") or \"\"),\"u\":str(it.get(\"url\") or \"\"),\"b\":str(it.get(\"brandUrl\") or \"\")},separators=(\",\",\":\")))"
+  ].join("\n")
+
+  property Process pyDetectProc: Process {
+    command: ["sh", "-c", "command -v python3 >/dev/null 2>&1"]
+    running: true
+    onExited: function(exitCode) { root.hasPython3 = exitCode === 0 }
+  }
+
+  function providerData(provider, raw) {
+    var compact = Model.parseProviderCache(provider.id, raw)
+    if (compact && compact.logos.length > 0)
+      return { fetchedAt: compact.fetchedAt, logos: compact.logos, legacyItems: null }
+    var parsed = Model.parseProvider(provider.id, raw)
+    return { fetchedAt: parsed.fetchedAt, logos: Model.normalizeFor(provider.id, parsed.items), legacyItems: parsed.items }
+  }
 
   function refresh(force) {
     for (var i = 0; i < root.providers.length; i++) {
@@ -44,11 +94,20 @@ QtObject {
     provider.loading = true
     provider.status = "loading"
     provider.message = ""
-    provider.proc.command = ["curl", "-fsSL", "--max-time", "30", "--max-filesize", "33554432",
-      "--proto", "=http,https", "--proto-redir", "=http,https", "--max-redirs", "5",
-      provider.def.catalogUrl]
+    provider.proc.command = root.fetchCommand(provider)
     provider.proc.running = true
     root.updateStatus()
+  }
+
+  function fetchCommand(provider) {
+    if (root.hasPython3) {
+      return ["bash", "-c",
+        'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 30 --max-filesize 33554432 -- "$1" | python3 -c \'' + root.catalogTransform + '\' "$2"',
+        "omiru-fetch", provider.def.catalogUrl, provider.id]
+    }
+    return ["curl", "-fsSL", "--max-time", "30", "--max-filesize", "33554432",
+      "--proto", "=http,https", "--proto-redir", "=http,https", "--max-redirs", "5",
+      provider.def.catalogUrl]
   }
 
   function clearCache() {
@@ -72,6 +131,7 @@ QtObject {
     root.queue = []
     root.pending = {}
     root.ready = {}
+    root.readyRevision++
     root.texts = {}
     root.downloads = 0
     root.rasterStarted = false
@@ -79,7 +139,6 @@ QtObject {
     for (i = 0; i < root.providers.length; i++) {
       var prov = root.providers[i]
       prov.fetchedAt = 0
-      prov.items = []
       prov.logos = []
       prov.loading = false
       prov.status = "idle"
@@ -197,6 +256,7 @@ QtObject {
     root.categories = Model.categoriesOf(merged)
     root.updateStatus()
     root.prefetch()
+    gc()
   }
 
   function updateStatus() {
@@ -219,12 +279,10 @@ QtObject {
 
   function loadCache(provider, raw) {
     if (!provider || !provider.enabled || root.expectedStop) return
-    var parsed = Model.parseProvider(provider.id, raw)
-    var logos = Model.normalizeFor(provider.id, parsed.items)
-    if (logos.length > 0) {
-      provider.fetchedAt = parsed.fetchedAt
-      provider.items = parsed.items
-      provider.logos = logos
+    var data = root.providerData(provider, raw)
+    if (data.logos.length > 0) {
+      provider.fetchedAt = data.fetchedAt
+      provider.logos = data.logos
       provider.status = "ready"
       provider.message = ""
       root.rebuildProviders()
@@ -235,9 +293,8 @@ QtObject {
   function applyFetch(provider, raw) {
     if (!provider || root.expectedStop) return
     provider.loading = false
-    var parsed = Model.parseProvider(provider.id, raw)
-    var logos = Model.normalizeFor(provider.id, parsed.items)
-    if (logos.length === 0) {
+    var data = root.providerData(provider, raw)
+    if (data.logos.length === 0) {
       if (provider.logos.length === 0) {
         provider.status = "error"
         provider.message = "Couldn't reach " + provider.name + " — Ctrl+R to retry"
@@ -248,12 +305,14 @@ QtObject {
       root.updateStatus()
       return
     }
-    provider.fetchedAt = parsed.fetchedAt || Date.now()
-    provider.items = parsed.items
-    provider.logos = logos
+    provider.fetchedAt = data.fetchedAt || Date.now()
+    provider.logos = data.logos
     provider.status = "ready"
     provider.message = ""
-    provider.file.setText(JSON.stringify({ fetchedAt: provider.fetchedAt, items: parsed.items }) + "\n")
+    if (data.legacyItems)
+      provider.file.setText(JSON.stringify({ fetchedAt: provider.fetchedAt, items: data.legacyItems }) + "\n")
+    else
+      provider.file.setText(String(raw || "") + "\n")
     root.rebuildProviders()
   }
 
@@ -272,6 +331,7 @@ QtObject {
       }
     }
     root.ready = next
+    root.readyRevision++
   }
 
   function enqueue(logo, variant, priority) {
@@ -300,6 +360,7 @@ QtObject {
 
   function prefetch() {
     if (root.expectedStop) return
+    var needed = {}
     var gateOpen = true
     for (var i = 0; i < root.providers.length; i++) {
       var provider = root.providers[i]
@@ -315,16 +376,43 @@ QtObject {
         for (var j = logos.length - 1; j >= 0; j--) {
           var logo = logos[j]
           var variant = Model.resolveVariant(logo, root.preferDark, Model.primaryKind(logo))
+          var key = Model.logoCacheKey(logo, variant)
+          if (key) needed[key] = 1
           root.enqueue(logo, variant, true)
         }
       } else {
         for (var k = 0; k < logos.length; k++) {
           var l2 = logos[k]
           var v2 = Model.resolveVariant(l2, root.preferDark, Model.primaryKind(l2))
+          var k2 = Model.logoCacheKey(l2, v2)
+          if (k2) needed[k2] = 1
           root.enqueue(l2, v2, false)
         }
       }
     }
+    root.expectedTotal = root.countKeys(needed)
+    root.updateIndexProgress()
+  }
+
+  function countKeys(obj) {
+    var n = 0
+    for (var k in obj) n++
+    return n
+  }
+
+  function workersBusy() {
+    for (var i = 0; i < root.workers.length; i++) {
+      if (root.workers[i].running) return true
+    }
+    return false
+  }
+
+  function updateIndexProgress() {
+    var total = root.expectedTotal
+    var ready = root.countKeys(root.ready)
+    var pendingWork = root.queue.length > 0 || root.workersBusy()
+    root.indexing = total > 0 && ready < total && pendingWork
+    root.indexProgress = total > 0 ? Math.min(1, ready / total) : 0
   }
 
   function pump() {
@@ -334,7 +422,8 @@ QtObject {
       var item = root.queue.shift()
       worker.item = item
       worker.command = ["bash", "-c",
-        'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1\n'
+        'D="${1%/*}"; mkdir -p -- "$D" || exit 1\n'
+        + 'curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1\n'
         + 'if [ "$3" != "png" ] && command -v rsvg-convert >/dev/null 2>&1 && rsvg-convert -w 192 -o "$1.png" "$1" 2>/dev/null; then\n'
         + '  exit 42\n'
         + 'fi\n'
@@ -350,10 +439,8 @@ QtObject {
     worker.item = null
     if (!item) return
     if (code === 0 || code === 42) {
-      var next = {}
-      for (var k in root.ready) next[k] = root.ready[k]
-      next[item.key] = code === 42 || item.kind === "png" ? "png" : "svg"
-      root.ready = next
+      root.ready[item.key] = code === 42 || item.kind === "png" ? "png" : "svg"
+      root.readyRevision++
       root.downloads++
     } else {
       delete root.pending[item.key]
@@ -381,7 +468,8 @@ QtObject {
     if (!url) return
     var path = root.libraryDir + "/" + key + "." + format
     Quickshell.execDetached(["bash", "-c",
-      'if [ ! -f "$1" ]; then curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1; fi\n'
+      'D="${1%/*}"; mkdir -p -- "$D" || exit 1\n'
+      + 'if [ ! -f "$1" ]; then curl -fsSL --proto "=http,https" --proto-redir "=http,https" --max-redirs 5 --max-time 15 --max-filesize 5242880 -o "$1" -- "$2" || exit 1; fi\n'
       + 'wl-copy --type "image/' + format + '" < "$1"',
       "omiru-copy", path, url])
   }
@@ -466,6 +554,13 @@ QtObject {
   }
 
   property bool rasterStarted: false
+
+  property Timer indexTimer: Timer {
+    interval: 400
+    repeat: true
+    running: true
+    onTriggered: root.updateIndexProgress()
+  }
 
   property Process rasterProc: Process {
     command: ["bash", "-c",
@@ -556,6 +651,7 @@ QtObject {
   Component.onCompleted: {
     for (var i = 0; i < root.workerCount; i++)
       root.workers.push(root.workerComponent.createObject(root))
+    Quickshell.execDetached(["hyprctl", "keyword", "layerrule", "noanim,ussego-omiru"])
   }
 
   Component.onDestruction: {
