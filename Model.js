@@ -457,7 +457,12 @@ function isPrivateHost(host) {
     var first = groups[0]
     if (first < "2000" || first > "3fff") return true
     if (first === "2002") return true
-    if (first === "2001" && groups[1] === "0000") return true
+    if (first === "3ffe" || first === "3fff") return true
+    if (first === "2001") {
+      if (groups[1] === "0000" || groups[1] === "0db8" || groups[1] === "0002") return true
+      if (groups[1] >= "0010" && groups[1] <= "001f") return true
+      if (groups[1] >= "0020" && groups[1] <= "002f") return true
+    }
     return false
   }
   if (isNumericIpLike(host)) return true

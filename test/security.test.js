@@ -86,6 +86,12 @@ const blocked = [
   "http://[2002:7f00:1::]/",
   "http://[2002:0a00::]/",
   "http://[2001:0000:4136:e378:8000:0000:feff:ffff]/",
+  "http://[2001:db8::1]/",
+  "http://[2001:2::1]/",
+  "http://[2001:10::1]/",
+  "http://[2001:20::1]/",
+  "http://[3ffe::1]/",
+  "http://[3fff::1]/",
   "https://0.0.0.0/x",
   "javascript:alert(1)",
   "http://evil.com@127.0.0.1:8080/",
@@ -111,8 +117,7 @@ const allowed = [
   "http://100.128.0.1/",
   "http://198.20.0.1/",
   "http://[2001:4860:4860::8888]/",
-  "http://[2606:4700::1111]/",
-  "http://[2001:db8::1]/"
+  "http://[2606:4700::1111]/"
 ]
 
 check("routeUrl rejects non-http(s) and private hosts", function() {
