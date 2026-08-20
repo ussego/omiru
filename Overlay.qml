@@ -1399,7 +1399,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.pickAction(index + 1)
+                        onClicked: { root.pickAction(index + 1); root.copyDetail() }
                       }
                     }
                   }
