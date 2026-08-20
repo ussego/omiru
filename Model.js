@@ -1,4 +1,85 @@
-var API_URL = "https://api.svgl.app"
+var SVGL_API_URL = "https://api.svgl.app"
+var SVGL_SVG_URL = "https://api.svgl.app/svg/"
+var SVGL_WEBSITE = "https://svgl.app/"
+var DASHBOARD_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/"
+var DASHBOARD_SEARCH_URL = "https://dashboardicons.com/api/icons/search"
+var SIMPLE_ICONS_CDN = "https://cdn.simpleicons.org/"
+var DASHBOARD_WEBSITE = "https://dashboardicons.com/"
+
+var TYPES = ["svg", "png", "webp"]
+
+var ACTIONS = {
+  "svg":     { label: "SVG",      type: "svg" },
+  "svgUrl":  { label: "SVG URL",  type: "svg" },
+  "jsx":     { label: "JSX",      type: "svg" },
+  "tsx":     { label: "TSX",      type: "svg" },
+  "shadcn":  { label: "shadcn",   type: "svg" },
+  "png":     { label: "PNG",      type: "png" },
+  "pngUrl":  { label: "PNG URL",  type: "png" },
+  "webp":    { label: "WebP",     type: "webp" },
+  "webpUrl": { label: "WebP URL", type: "webp" }
+}
+
+function providerDefs() {
+  return [
+    {
+      id: "dashboard",
+      name: "dashboard icons",
+      defaultEnabled: true,
+      catalogUrl: DASHBOARD_SEARCH_URL,
+      cacheFile: "dashboard.json",
+      actions: ["svg", "svgUrl", "jsx", "tsx", "png", "pngUrl", "webp", "webpUrl"],
+      website: DASHBOARD_WEBSITE
+    },
+    {
+      id: "svgl",
+      name: "svgl",
+      defaultEnabled: true,
+      catalogUrl: SVGL_API_URL,
+      cacheFile: "svgl.json",
+      actions: ["svg", "svgUrl", "jsx", "tsx", "shadcn"],
+      website: SVGL_WEBSITE
+    }
+  ]
+}
+
+function parseConfig(raw) {
+  var enabled = null
+  var filter = null
+  var touched = null
+  try {
+    var data = JSON.parse(String(raw || ""))
+    if (data && Array.isArray(data.providers)) enabled = data.providers
+    if (data && typeof data.filter === "string") filter = data.filter
+    if (data && Array.isArray(data.touched)) touched = data.touched
+  } catch (e) {}
+  var defs = providerDefs()
+  var all = []
+  for (var i = 0; i < defs.length; i++) all.push(defs[i].id)
+  var defaults = []
+  for (i = 0; i < defs.length; i++) {
+    if (defs[i].defaultEnabled) defaults.push(defs[i].id)
+  }
+  if (defaults.length === 0) defaults = all.slice()
+  if (!enabled) {
+    return { enabledIds: defaults.slice(), touched: defaults.slice(), filter: normalizeFilter(filter), fresh: true }
+  }
+  var out = []
+  for (i = 0; i < defs.length; i++) {
+    if (enabled.indexOf(defs[i].id) !== -1) out.push(defs[i].id)
+  }
+  var effTouched = touched ? touched.slice() : enabled.slice()
+  return { enabledIds: out, touched: effTouched, filter: normalizeFilter(filter), fresh: false }
+}
+
+function normalizeFilter(filter) {
+  if (!filter || String(filter).toLowerCase() === "all") return "all"
+  var defs = providerDefs()
+  for (var i = 0; i < defs.length; i++) {
+    if (defs[i].id === filter) return defs[i].id
+  }
+  return "all"
+}
 
 function parseSvgl(raw) {
   var data
@@ -13,30 +94,120 @@ function parseSvgl(raw) {
   return { fetchedAt: 0, items: [] }
 }
 
+function parseDashboard(raw) {
+  var data
+  try {
+    data = JSON.parse(String(raw || ""))
+  } catch (e) {
+    return { fetchedAt: 0, items: [] }
+  }
+  if (Array.isArray(data)) return { fetchedAt: 0, items: data }
+  if (data && typeof data === "object" && Array.isArray(data.items))
+    return { fetchedAt: Number(data.fetchedAt) || 0, items: data.items }
+  if (data && typeof data === "object") {
+    var items = []
+    for (var key in data) {
+      if (!data.hasOwnProperty(key)) continue
+      var entry = data[key]
+      if (entry && typeof entry === "object") {
+        entry.id = key
+        items.push(entry)
+      }
+    }
+    return { fetchedAt: 0, items: items }
+  }
+  return { fetchedAt: 0, items: [] }
+}
+
+function parseProvider(providerId, raw) {
+  if (providerId === "dashboard") return parseDashboard(raw)
+  return parseSvgl(raw)
+}
+
+function normalizeCategory(name) {
+  return String(name || "").trim().toLowerCase().replace(/-/g, " ")
+}
+
+var BRAND_NAMES = {
+  github: "GitHub", gitlab: "GitLab", git: "Git", npm: "NPM", pnpm: "pnpm", yarn: "Yarn",
+  nodejs: "Node.js", node: "Node.js", nextjs: "Next.js", nuxt: "Nuxt", vue: "Vue", react: "React",
+  typescript: "TypeScript", javascript: "JavaScript", mysql: "MySQL", postgresql: "PostgreSQL",
+  postgres: "PostgreSQL", mongodb: "MongoDB", redis: "Redis", nginx: "Nginx", apache: "Apache",
+  docker: "Docker", kubernetes: "Kubernetes", terraform: "Terraform", ansible: "Ansible",
+  jenkins: "Jenkins", grafana: "Grafana", prometheus: "Prometheus", linux: "Linux", python: "Python",
+  golang: "Go", go: "Go", rust: "Rust", kotlin: "Kotlin", swift: "Swift", deno: "Deno", bun: "Bun",
+  vite: "Vite", webpack: "Webpack", babel: "Babel", esbuild: "esbuild", biome: "Biome",
+  vercel: "Vercel", netlify: "Netlify", cloudflare: "Cloudflare", vscode: "VS Code",
+  vscodium: "VSCodium", figma: "Figma", notion: "Notion", slack: "Slack", discord: "Discord",
+  telegram: "Telegram", whatsapp: "WhatsApp", linkedin: "LinkedIn", youtube: "YouTube",
+  spotify: "Spotify", gmail: "Gmail", google: "Google", microsoft: "Microsoft", apple: "Apple",
+  amazon: "Amazon", aws: "AWS", azure: "Azure", gcp: "GCP", heroku: "Heroku",
+  digitalocean: "DigitalOcean", openai: "OpenAI", anthropic: "Anthropic", openvpn: "OpenVPN",
+  wireguard: "WireGuard", traefik: "Traefik", vitest: "Vitest", storybook: "Storybook",
+  nx: "Nx", pypi: "PyPI", dotenv: "dotenv", dotenvx: "dotenvx", shadcn: "shadcn",
+  n8n: "n8n", "pi-hole": "Pi-hole", "xcp-ng": "XCP-ng", "node-red": "Node-RED",
+  "open-webui": "Open WebUI", adguard: "AdGuard"
+}
+
+function titleWord(word) {
+  if (word.length <= 1) return word.toUpperCase()
+  if (/^[A-Z0-9]+$/.test(word) && !/^[0-9]+$/.test(word)) return word
+  if (/[a-z]/.test(word) && /[A-Z]/.test(word.slice(1))) return word
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+}
+
+function titleCase(name) {
+  var s = String(name || "").trim()
+  if (!s) return s
+  var lower = s.toLowerCase()
+  if (BRAND_NAMES[lower]) return BRAND_NAMES[lower]
+  s = s.replace(/-/g, " ")
+  lower = s.toLowerCase()
+  if (BRAND_NAMES[lower]) return BRAND_NAMES[lower]
+  var out = ""
+  var i = 0
+  var len = s.length
+  while (i < len) {
+    var c = s.charAt(i)
+    if (/[A-Za-z0-9]/.test(c)) {
+      var j = i
+      while (j < len && /[A-Za-z0-9]/.test(s.charAt(j))) j++
+      out += titleWord(s.slice(i, j))
+      i = j
+    } else {
+      out += c
+      i++
+    }
+  }
+  return out
+}
+
 function categoryList(value) {
   if (Array.isArray(value)) {
     var out = []
     for (var i = 0; i < value.length; i++) {
-      var name = String(value[i] || "").trim()
+      var name = normalizeCategory(value[i])
       if (name && out.indexOf(name) === -1) out.push(name)
     }
     return out
   }
-  var single = String(value || "").trim()
+  var single = normalizeCategory(value)
   return single ? [single] : []
 }
 
-function normalizeLogos(svgs) {
+function normalizeLogos(svgs, providerId) {
   var values = Array.isArray(svgs) ? svgs : []
   var out = []
   for (var i = 0; i < values.length; i++) {
     var item = values[i]
     if (!item || typeof item !== "object") continue
-    var title = String(item.title || "").trim()
+    var title = titleCase(item.title)
     if (!title || !item.route) continue
     out.push({
+      provider: providerId,
       id: Number(item.id) || out.length,
       title: title,
+      search: title,
       categories: categoryList(item.category),
       route: item.route,
       url: String(item.url || ""),
@@ -46,6 +217,59 @@ function normalizeLogos(svgs) {
   return out
 }
 
+function dashboardFormats(item) {
+  if (item.source === "simpleicons") return ["svg"]
+  if (item.source === "selfhst" || item.source === "lobehub") {
+    var formats = item.external && Array.isArray(item.external.formats) ? item.external.formats : []
+    if (formats.length === 0) formats = ["svg", "png", "webp"]
+    return formats
+  }
+  return String(item.data && item.data.base) === "png" ? ["png", "webp"] : ["svg", "png", "webp"]
+}
+
+function normalizeDashboardLogos(entries) {
+  var values = Array.isArray(entries) ? entries : []
+  var out = []
+  for (var i = 0; i < values.length; i++) {
+    var item = values[i]
+    if (!item || typeof item !== "object") continue
+    var slug = String(item.slug || item.id || "").trim()
+    if (!slug) continue
+    var data = item.data || {}
+    var aliases = Array.isArray(data.aliases) ? data.aliases.map(String) : []
+    var clean = []
+    for (var a = 0; a < aliases.length; a++) {
+      var alias = aliases[a].trim()
+      if (alias) clean.push(alias)
+    }
+    var title = titleCase(String(item.name || "").trim() || (clean.length > 0 ? clean[0] : slug))
+    var source = String(item.source || "native").toLowerCase()
+    var formats = dashboardFormats(item)
+    out.push({
+      provider: "dashboard",
+      source: source,
+      id: slug,
+      slug: slug,
+      title: title,
+      search: (title + " " + slug + " " + clean.join(" ") + " " + source).trim(),
+      categories: categoryList(data.categories),
+      formats: formats,
+      hasSvg: formats.indexOf("svg") !== -1,
+      templates: item.external && item.external.url_templates && typeof item.external.url_templates === "object"
+        ? item.external.url_templates : null,
+      brand: item.external && typeof item.external.brand_color === "string" ? item.external.brand_color : "",
+      url: DASHBOARD_WEBSITE,
+      brandUrl: ""
+    })
+  }
+  return out
+}
+
+function normalizeFor(providerId, items) {
+  if (providerId === "dashboard") return normalizeDashboardLogos(items)
+  return normalizeLogos(items, providerId)
+}
+
 function categoriesOf(logos) {
   var counts = {}
   var order = []
@@ -53,7 +277,7 @@ function categoriesOf(logos) {
   for (var i = 0; i < logos.length; i++) {
     total++
     var cats = logos[i].categories
-    if (cats.length === 0) cats = ["Uncategorized"]
+    if (cats.length === 0) cats = ["uncategorized"]
     for (var j = 0; j < cats.length; j++) {
       if (!counts[cats[j]]) {
         counts[cats[j]] = 0
@@ -67,7 +291,7 @@ function categoriesOf(logos) {
     if (diff !== 0) return diff
     return a.toLowerCase() < b.toLowerCase() ? -1 : 1
   })
-  var out = [{ name: "All", total: total }]
+  var out = [{ name: "all", total: total }]
   for (i = 0; i < order.length; i++) out.push({ name: order[i], total: counts[order[i]] })
   return out
 }
@@ -77,8 +301,9 @@ function normalizedQuery(query) {
 }
 
 function matchesCategory(logo, category) {
-  if (!category || category === "All") return true
-  var wanted = category.toLowerCase()
+  if (!category) return true
+  var wanted = String(category).toLowerCase()
+  if (wanted === "all") return true
   var cats = logo.categories
   if (cats.length === 0) return wanted === "uncategorized"
   for (var i = 0; i < cats.length; i++) {
@@ -87,11 +312,11 @@ function matchesCategory(logo, category) {
   return false
 }
 
-function filterLogos(logos, query, category, limit) {
+function filterLogos(logos, query, category, provider, limit) {
   var values = Array.isArray(logos) ? logos : []
   var needle = normalizedQuery(query)
-  var max = limit === undefined || limit === null ? 800 : Number(limit)
-  if (isNaN(max)) max = 800
+  var max = limit === undefined || limit === null ? 10000 : Number(limit)
+  if (isNaN(max)) max = 10000
   max = Math.max(0, max)
   if (max === 0) return []
 
@@ -100,7 +325,8 @@ function filterLogos(logos, query, category, limit) {
     var logo = values[i]
     if (!logo || !logo.title) continue
     if (!matchesCategory(logo, category)) continue
-    if (needle && logo.title.toLowerCase().indexOf(needle) === -1) continue
+    if (provider && String(provider).toLowerCase() !== "all" && logo.provider !== provider) continue
+    if (needle && (logo.search || logo.title).toLowerCase().indexOf(needle) === -1) continue
     out.push(logo)
     if (out.length >= max) break
   }
@@ -133,7 +359,142 @@ function isDark(color) {
   return luminance < 0.45
 }
 
-var FORMATS = ["svg", "shadcn", "jsx", "tsx"]
+function variantModes(logo, format) {
+  if (!logo || !logo.templates) return ["original"]
+  var t = logo.templates
+  var hasDark = Boolean(t[format + "_dark"])
+  var hasLight = Boolean(t[format + "_light"])
+  if (hasDark && hasLight) return ["original", "light", "dark"]
+  if (hasDark) return ["original", "dark"]
+  if (hasLight) return ["original", "light"]
+  return ["original"]
+}
+
+function resolveVariant(logo, preferDark, format) {
+  var modes = variantModes(logo, format)
+  if (modes.length < 2) return "original"
+  var want = preferDark ? "dark" : "light"
+  return modes.indexOf(want) !== -1 ? want : "original"
+}
+
+function dashboardAssetUrl(logo, variant, format) {
+  var t = logo.templates
+  if (t) {
+    var key = format
+    if (variant === "dark" && t[format + "_dark"]) key = format + "_dark"
+    else if (variant === "light" && t[format + "_light"]) key = format + "_light"
+    var template = t[key]
+    if (template) return String(template).split("{slug}").join(logo.slug)
+  }
+  if (logo.source === "simpleicons") {
+    if (format === "svg") return SIMPLE_ICONS_CDN + logo.slug
+    return ""
+  }
+  return DASHBOARD_CDN + format + "/" + logo.slug + "." + format
+}
+
+function variantTag(logo, variant) {
+  var t = logo && logo.templates
+  if (!t) return ""
+  var f = primaryKind(logo)
+  if (t[f + "_dark"] && t[f + "_light"])
+    return variant === "dark" ? "-dark" : variant === "light" ? "-light" : ""
+  return ""
+}
+
+function assetUrl(logo, variant, format) {
+  if (!logo) return ""
+  if (logo.provider === "dashboard") return dashboardAssetUrl(logo, variant, format)
+  if (format === "svg") return routeUrl(logo.route, variant === "dark")
+  return ""
+}
+
+function primaryKind(logo) {
+  if (!logo) return "svg"
+  if (logo.provider === "dashboard") return logo.hasSvg ? "svg" : "png"
+  return "svg"
+}
+
+function primaryAssetUrl(logo, variant) {
+  if (!logo) return ""
+  if (logo.provider === "dashboard") return assetUrl(logo, variant, primaryKind(logo))
+  return routeUrl(logo.route, variant === "dark")
+}
+
+function logoCacheKey(logo, variant) {
+  if (!logo) return ""
+  if (logo.provider === "dashboard")
+    return "dashboard-" + slugFor(logo.slug, logo.id) + variantTag(logo, variant)
+  return slugFor(routeUrl(logo.route, variant === "dark"), logo.id).replace(/\.svg$/, "")
+}
+
+function readSourceUrl(logo, variant) {
+  if (!logo) return ""
+  if (logo.provider === "dashboard") return assetUrl(logo, variant, "svg")
+  return SVGL_SVG_URL + slugFor(routeUrl(logo.route, variant === "dark"), logo.id)
+}
+
+function providerActions(provider) {
+  if (!provider) return []
+  if (Array.isArray(provider.actions)) return provider.actions
+  if (provider.def && Array.isArray(provider.def.actions)) return provider.def.actions
+  return []
+}
+
+function actionAvailable(provider, actionId, logo) {
+  if (!provider || !actionId) return false
+  if (!ACTIONS[actionId]) return false
+  var actions = providerActions(provider)
+  if (actions.indexOf(actionId) === -1) return false
+  if (provider.id === "dashboard") {
+    if (actionId === "svg" || actionId === "jsx" || actionId === "tsx" || actionId === "svgUrl")
+      return Boolean(logo && logo.hasSvg)
+    return true
+  }
+  return true
+}
+
+function typesFor(provider, logo) {
+  if (!provider || !logo) return []
+  if (provider.id === "svgl") return ["svg"]
+  var types = []
+  var formats = Array.isArray(logo.formats) ? logo.formats : []
+  if (formats.indexOf("svg") !== -1) types.push("svg")
+  if (formats.indexOf("png") !== -1) types.push("png")
+  if (formats.indexOf("webp") !== -1) types.push("webp")
+  return types
+}
+
+function actionsFor(provider, logo, type) {
+  if (!provider || !type) return []
+  var actions = providerActions(provider)
+  var out = []
+  for (var a = 0; a < actions.length; a++) {
+    var id = actions[a]
+    if (ACTIONS[id] && ACTIONS[id].type === type && actionAvailable(provider, id, logo))
+      out.push(id)
+  }
+  return out
+}
+
+function actionAt(actions, index) {
+  if (!actions || actions.length === 0) return ""
+  var ai = Number(index) || 0
+  return actions[Math.max(0, Math.min(ai, actions.length - 1))]
+}
+
+function actionLabel(actionId) {
+  return ACTIONS[actionId] ? ACTIONS[actionId].label : ""
+}
+
+function sourceLabel(logo) {
+  if (!logo || logo.provider !== "dashboard") return ""
+  if (logo.source === "native") return "Dashboard Icons"
+  if (logo.source === "selfhst") return "selfh.st"
+  if (logo.source === "lobehub") return "LobeHub"
+  if (logo.source === "simpleicons") return "Simple Icons"
+  return ""
+}
 
 function shadcnSlug(title) {
   return String(title || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
@@ -232,15 +593,38 @@ function toReactComponent(svgCode, title, typescript) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    API_URL: API_URL,
-    parseSvgl: parseSvgl,
-    normalizeLogos: normalizeLogos,
+    SVGL_API_URL: SVGL_API_URL,
+    SVGL_SVG_URL: SVGL_SVG_URL,
+    SVGL_WEBSITE: SVGL_WEBSITE,
+    DASHBOARD_CDN: DASHBOARD_CDN,
+    DASHBOARD_SEARCH_URL: DASHBOARD_SEARCH_URL,
+    DASHBOARD_WEBSITE: DASHBOARD_WEBSITE,
+    SIMPLE_ICONS_CDN: SIMPLE_ICONS_CDN,
+    TYPES: TYPES,
+    ACTIONS: ACTIONS,
+    providerDefs: providerDefs,
+    parseConfig: parseConfig,
+    normalizeFilter: normalizeFilter,
+    parseProvider: parseProvider,
+    normalizeFor: normalizeFor,
     categoriesOf: categoriesOf,
     filterLogos: filterLogos,
     routeUrl: routeUrl,
     slugFor: slugFor,
     isDark: isDark,
-    FORMATS: FORMATS,
+    variantModes: variantModes,
+    resolveVariant: resolveVariant,
+    assetUrl: assetUrl,
+    primaryKind: primaryKind,
+    primaryAssetUrl: primaryAssetUrl,
+    logoCacheKey: logoCacheKey,
+    readSourceUrl: readSourceUrl,
+    actionAvailable: actionAvailable,
+    typesFor: typesFor,
+    actionsFor: actionsFor,
+    actionAt: actionAt,
+    actionLabel: actionLabel,
+    sourceLabel: sourceLabel,
     shadcnCommand: shadcnCommand,
     componentName: componentName,
     reactifySvg: reactifySvg,
