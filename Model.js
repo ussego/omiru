@@ -446,6 +446,9 @@ function ipv4Private(host) {
 
 function isPrivateHost(host) {
   if (!host) return true
+  for (var h = 0; h < host.length; h++) {
+    if (host.charCodeAt(h) > 0x7e) return true
+  }
   if (host.indexOf("%") !== -1) return true
   if (host === "localhost" || host.slice(-10) === ".localhost") return true
   var canon = canonicalIpv6(host)
