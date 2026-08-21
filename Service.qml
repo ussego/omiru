@@ -327,7 +327,7 @@ QtObject {
       } else if (name.slice(-4) === ".svg") {
         if (next[name.slice(0, -4)] !== "png") next[name.slice(0, -4)] = "svg"
       } else if (name.slice(-4) === ".png") {
-        next[name.slice(0, -4)] = "png"
+        if (!next[name.slice(0, -4)]) next[name.slice(0, -4)] = "raw"
       }
     }
     root.ready = next
@@ -337,8 +337,10 @@ QtObject {
   function enqueue(logo, variant, priority) {
     var key = Model.logoCacheKey(logo, variant)
     if (!key) return
-    if (root.ready[key] || root.pending[key]) return
     var kind = Model.primaryKind(logo)
+    var have = root.ready[key]
+    if (have && (have !== "raw" || kind === "png")) return
+    if (root.pending[key]) return
     var url = Model.primaryAssetUrl(logo, variant)
     if (!url) return
     root.pending[key] = true
@@ -439,7 +441,7 @@ QtObject {
     worker.item = null
     if (!item) return
     if (code === 0 || code === 42) {
-      root.ready[item.key] = code === 42 || item.kind === "png" ? "png" : "svg"
+      root.ready[item.key] = code === 42 ? "png" : item.kind === "png" ? "raw" : "svg"
       root.readyRevision++
       root.downloads++
     } else {

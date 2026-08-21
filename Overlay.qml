@@ -676,9 +676,12 @@ Item {
     var key = root.logoKey(logo, variant)
     var state = root.svc.ready[key]
     if (!state) return ""
+    var base = root.svc.libraryDir + "/" + key
+    if (state === "raw")
+      return Model.primaryKind(logo) === "png" ? Util.fileUrl(base + ".png") : ""
     if (Model.primaryKind(logo) === "png")
-      return Util.fileUrl(root.svc.libraryDir + "/" + key + ".png")
-    return Util.fileUrl(root.svc.libraryDir + "/" + key + (state === "png" ? ".svg.png" : ".svg"))
+      return state === "svg" ? Util.fileUrl(base + ".svg") : Util.fileUrl(base + ".png")
+    return Util.fileUrl(base + (state === "png" ? ".svg.png" : ".svg"))
   }
 
   onSvcChanged: root.rebuildDisplay()
