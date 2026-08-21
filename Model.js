@@ -623,15 +623,6 @@ function dashboardAssetUrl(logo, variant, format) {
   return DASHBOARD_CDN + format + "/" + logo.slug + "." + format
 }
 
-function variantTag(logo, variant) {
-  var t = logo && logo.templates
-  if (!t) return ""
-  var f = primaryKind(logo)
-  if (t[f + "_dark"] && t[f + "_light"])
-    return variant === "dark" ? "-dark" : variant === "light" ? "-light" : ""
-  return ""
-}
-
 function assetUrl(logo, variant, format) {
   if (!logo) return ""
   var url = ""
@@ -653,9 +644,9 @@ function primaryAssetUrl(logo, variant) {
 
 function logoCacheKey(logo, variant) {
   if (!logo) return ""
-  if (logo.provider === "dashboard")
-    return "dashboard-" + slugFor(logo.slug, logo.id) + variantTag(logo, variant)
-  return slugFor(routeUrl(logo.route, variant === "dark"), logo.id).replace(/\.svg$/, "")
+  var url = primaryAssetUrl(logo, variant)
+  var name = slugFor(url || (logo.provider === "dashboard" ? logo.slug : String(logo.route || "")), logo.id)
+  return (logo.provider === "dashboard" ? "dashboard-" : "") + name.replace(/\.(svg|png|webp)$/, "")
 }
 
 function readSourceUrl(logo, variant) {
